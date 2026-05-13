@@ -21,6 +21,34 @@ static const int WHITE = 2;
 static const int INF = 1000000000;
 static const int DIRS[4][2] = {{1, 0}, {0, 1}, {1, 1}, {1, -1}};
 
+// Search presets. The default build is the medium tier. Extra tiers are
+// selected at compile time, for example with -DSUPER_AI or -DFAST_AI.
+#ifdef SUPER_AI
+static const int TIME_LIMIT_MS = 2800;
+static const int MAX_SEARCH_DEPTH = 5;
+static const int ROOT_CANDIDATE_LIMIT = 40;
+static const int DEEP_CANDIDATE_LIMIT = 18;
+static const int SHALLOW_CANDIDATE_LIMIT = 26;
+#elif defined(FAST_AI)
+static const int TIME_LIMIT_MS = 900;
+static const int MAX_SEARCH_DEPTH = 4;
+static const int ROOT_CANDIDATE_LIMIT = 24;
+static const int DEEP_CANDIDATE_LIMIT = 10;
+static const int SHALLOW_CANDIDATE_LIMIT = 16;
+#elif defined(ULTRAFAST_AI)
+static const int TIME_LIMIT_MS = 350;
+static const int MAX_SEARCH_DEPTH = 3;
+static const int ROOT_CANDIDATE_LIMIT = 18;
+static const int DEEP_CANDIDATE_LIMIT = 8;
+static const int SHALLOW_CANDIDATE_LIMIT = 12;
+#else
+static const int TIME_LIMIT_MS = 1500;
+static const int MAX_SEARCH_DEPTH = 4;
+static const int ROOT_CANDIDATE_LIMIT = 30;
+static const int DEEP_CANDIDATE_LIMIT = 14;
+static const int SHALLOW_CANDIDATE_LIMIT = 20;
+#endif
+
 // Compile the same source into two independent programs:
 //   g++ ... -DBLACK_AI main.cpp -o black.exe
 //   g++ ... -DWHITE_AI main.cpp -o white.exe
@@ -367,9 +395,12 @@ static int alphaBeta(int depth, int alpha, int beta, int side, int rootColor, Mo
     }
 
     int alphaOrig = alpha;
-    // Balanced-speed preset: limit deeper nodes more aggressively than the
-    // root while preserving enough candidates for tactical defense.
-    vector<Candidate> moves = generateCandidates(side, depth >= 3 ? 14 : 20);
+    // Limit deeper nodes more aggressively than the root while preserving
+    // enough candidates for tactical defense. Exact limits are preset-based.
+    vector<Candidate> moves = generateCandidates(
+        side,
+        depth >= 3 ? DEEP_CANDIDATE_LIMIT : SHALLOW_CANDIDATE_LIMIT
+    );
     if (moves.empty()) return evaluateBoard(rootColor);
 
     int best;
@@ -411,12 +442,11 @@ static int alphaBeta(int depth, int alpha, int beta, int side, int rootColor, Mo
 static Move chooseMove(int color) {
     if (moveCount == 0) return {18, 18};
 
-    // Balanced-speed preset: about 1.5 seconds per move, depth up to 4.
-    deadlineTime = chrono::steady_clock::now() + chrono::milliseconds(1500);
+    deadlineTime = chrono::steady_clock::now() + chrono::milliseconds(TIME_LIMIT_MS);
     timeoutFlag = false;
     transTable.clear();
 
-    vector<Candidate> rootMoves = generateCandidates(color, 30);
+    vector<Candidate> rootMoves = generateCandidates(color, ROOT_CANDIDATE_LIMIT);
     if (rootMoves.empty()) {
         for (int r = 0; r < N; ++r)
             for (int c = 0; c < N; ++c)
@@ -446,7 +476,7 @@ static Move chooseMove(int color) {
 
     Move bestMove = rootMoves[0].m;
     int bestScore = -INF;
-    for (int depth = 1; depth <= 4; ++depth) {
+    for (int depth = 1; depth <= MAX_SEARCH_DEPTH; ++depth) {
         if (timeExpired()) break;
         int depthBest = -INF;
         Move depthMove = bestMove;
@@ -494,6 +524,33 @@ static void outputMove(const Move &m) {
     cout << (m.r + 1) << ' ' << (m.c + 1) << '\n' << flush;
 }
 
+#ifdef SHOW_BOARD
+static char stoneChar(int value) {
+    if (value == BLACK) return 'X';
+    if (value == WHITE) return 'O';
+    return '.';
+}
+
+static void showBoard() {
+    cerr << "\n    ";
+    for (int c = 0; c < N; ++c) {
+        if (c + 1 < 10) cerr << ' ';
+        cerr << (c + 1) << ' ';
+    }
+    cerr << '\n';
+
+    for (int r = 0; r < N; ++r) {
+        if (r + 1 < 10) cerr << ' ';
+        cerr << (r + 1) << "  ";
+        for (int c = 0; c < N; ++c) {
+            cerr << stoneChar(board[r][c]) << "  ";
+        }
+        cerr << '\n';
+    }
+    cerr << flush;
+}
+#endif
+
 static void clearBoard() {
     for (int r = 0; r < N; ++r) {
         for (int c = 0; c < N; ++c) board[r][c] = EMPTY;
@@ -515,6 +572,9 @@ int main() {
     Move first = chooseMove(BLACK);
     putStone(first.r, first.c, BLACK);
     outputMove(first);
+#ifdef SHOW_BOARD
+    showBoard();
+#endif
 #endif
 
     Move in;
@@ -534,6 +594,9 @@ int main() {
         }
         putStone(out.r, out.c, MY_COLOR);
         outputMove(out);
+#ifdef SHOW_BOARD
+        showBoard();
+#endif
     }
     return 0;
 }
