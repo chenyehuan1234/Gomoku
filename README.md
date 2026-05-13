@@ -2,6 +2,8 @@
 
 38 路五子棋命令行 AI，使用 C++17 编写。项目提供两个裁判版程序和两个可视化程序：
 
+想了解 AI 搜索、评估函数、禁手判断和随机版原理，请看 [AI_TECHNICAL_GUIDE.md](AI_TECHNICAL_GUIDE.md)。
+
 - `black.exe`：黑方 AI，启动后立即输出第一手。
 - `white.exe`：白方 AI，启动后等待输入黑方第一手，再输出自己的落子。
 - `black_show.exe`：黑方 AI，额外在控制台显示棋盘。
