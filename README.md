@@ -6,6 +6,7 @@
 - `white.exe`：白方 AI，启动后等待输入黑方第一手，再输出自己的落子。
 - `black_show.exe`：黑方 AI，额外在控制台显示棋盘。
 - `white_show.exe`：白方 AI，额外在控制台显示棋盘。
+- `random_ai/`：随机版 exe 文件夹，同一局面会在近似同分好棋中随机选择。
 - `gomoku_referee.py`：Python 图形化裁判，可选择两个 exe 自动对打，也支持用户手动落子。
 
 裁判版用于自动评测或程序交互。标准输出严格只打印坐标，不打印中文、提示语、棋盘或胜负信息。
@@ -111,6 +112,22 @@ g++ -O2 -std=c++17 -DBLACK_AI -DULTRAFAST_AI main.cpp -o black_ultrafast.exe
 g++ -O2 -std=c++17 -DWHITE_AI -DULTRAFAST_AI main.cpp -o white_ultrafast.exe
 ```
 
+随机版使用同一份源码额外加 `-DRANDOM_AI`，建议统一放到 `random_ai/` 文件夹：
+
+```powershell
+mkdir random_ai
+g++ -O2 -std=c++17 -DBLACK_AI -DRANDOM_AI main.cpp -o random_ai/black_random.exe
+g++ -O2 -std=c++17 -DWHITE_AI -DRANDOM_AI main.cpp -o random_ai/white_random.exe
+g++ -O2 -std=c++17 -DBLACK_AI -DSHOW_BOARD -DRANDOM_AI main.cpp -o random_ai/black_show_random.exe
+g++ -O2 -std=c++17 -DWHITE_AI -DSHOW_BOARD -DRANDOM_AI main.cpp -o random_ai/white_show_random.exe
+g++ -O2 -std=c++17 -DBLACK_AI -DSUPER_AI -DRANDOM_AI main.cpp -o random_ai/black_super_random.exe
+g++ -O2 -std=c++17 -DWHITE_AI -DSUPER_AI -DRANDOM_AI main.cpp -o random_ai/white_super_random.exe
+g++ -O2 -std=c++17 -DBLACK_AI -DFAST_AI -DRANDOM_AI main.cpp -o random_ai/black_fast_random.exe
+g++ -O2 -std=c++17 -DWHITE_AI -DFAST_AI -DRANDOM_AI main.cpp -o random_ai/white_fast_random.exe
+g++ -O2 -std=c++17 -DBLACK_AI -DULTRAFAST_AI -DRANDOM_AI main.cpp -o random_ai/black_ultrafast_random.exe
+g++ -O2 -std=c++17 -DWHITE_AI -DULTRAFAST_AI -DRANDOM_AI main.cpp -o random_ai/white_ultrafast_random.exe
+```
+
 内部规则测试：
 
 ```powershell
@@ -195,6 +212,24 @@ g++ -O2 -std=c++17 -DSELF_TEST main.cpp -o self_test.exe
 
 同一个局面如果通过不同落子顺序到达，可以复用已有搜索结果。
 
+### 随机版
+
+默认 exe 是确定性的：固定输入通常会得到固定输出，便于调试和复现。使用 `-DRANDOM_AI` 编译的随机版会做两件事：
+
+- 第一手从中心附近的合法点中随机选择。
+- 搜索完成后，如果多步棋的评分非常接近，就从这些近似同分好棋中随机选一步。
+
+随机版仍会优先处理必胜和必防，不会因为随机而放弃一步成五或挡五。
+
+默认情况下，随机版每次启动会使用不同种子。如果需要复现同一盘，可以设置环境变量：
+
+```powershell
+$env:GOMOKU_SEED=12345
+.\random_ai\black_random.exe
+```
+
+同一个 `GOMOKU_SEED` 加同样输入，会得到同样输出。
+
 ## 参数档位和文件名
 
 当前 `black.exe` / `white.exe` 是中等档：
@@ -216,6 +251,16 @@ depth >= 3 ? 14 : 20
 | 超快速 | `black_ultrafast.exe` | `white_ultrafast.exe` | `350ms` | `3` | `18` | `8 / 12` |
 
 可视化版 `black_show.exe` / `white_show.exe` 使用中等档参数，并额外显示棋盘。
+
+`random_ai/` 文件夹中提供同样档位的随机版：
+
+| 档位 | 黑方随机版 | 白方随机版 |
+| --- | --- | --- |
+| 中等 | `black_random.exe` | `white_random.exe` |
+| 中等可视化 | `black_show_random.exe` | `white_show_random.exe` |
+| 超级 | `black_super_random.exe` | `white_super_random.exe` |
+| 快速 | `black_fast_random.exe` | `white_fast_random.exe` |
+| 超快速 | `black_ultrafast_random.exe` | `white_ultrafast_random.exe` |
 
 如果想手动改得更快，可以把默认参数改成：
 
@@ -248,6 +293,7 @@ depth >= 3 ? 18 : 26
 - `black_super.exe` / `white_super.exe`：超级档，棋力更强但更慢。
 - `black_fast.exe` / `white_fast.exe`：快速档。
 - `black_ultrafast.exe` / `white_ultrafast.exe`：超快速档。
+- `random_ai/`：随机版 exe 文件夹，包含中等、显示、超级、快速、超快速随机版。
 
 ## 验证建议
 
@@ -274,6 +320,17 @@ depth >= 3 ? 18 : 26
 ```
 
 坐标会继续输出，棋盘会显示在控制台中。
+
+随机版复现测试：
+
+```powershell
+$env:GOMOKU_SEED=12345
+@('12 12') | .\random_ai\black_random.exe
+@('12 12') | .\random_ai\black_random.exe
+Remove-Item Env:\GOMOKU_SEED
+```
+
+设置相同种子时，同样输入应输出一致；不设置种子时，多次运行有概率输出不同。
 
 禁手测试通过 `SELF_TEST` 覆盖：
 

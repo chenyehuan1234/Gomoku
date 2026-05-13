@@ -6,6 +6,7 @@
 #include <iostream>
 #include <limits>
 #include <random>
+#include <string>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -86,6 +87,46 @@ struct TTEntry {
 };
 
 static unordered_map<uint64_t, TTEntry> transTable;
+
+#ifdef RANDOM_AI
+static uint64_t parseSeed(const char *text) {
+    if (text == nullptr || *text == '\0') return 0;
+    try {
+        return stoull(string(text));
+    } catch (...) {
+        uint64_t value = 1469598103934665603ULL;
+        for (const char *p = text; *p; ++p) {
+            value ^= (unsigned char)(*p);
+            value *= 1099511628211ULL;
+        }
+        return value;
+    }
+}
+
+static void initRuntimeRandom() {
+    const char *seedText = getenv("GOMOKU_SEED");
+    bool hasFixedSeed = seedText != nullptr && *seedText != '\0';
+    uint64_t seed = parseSeed(seedText);
+    if (!hasFixedSeed) {
+        random_device rd;
+        uint64_t now = (uint64_t)chrono::high_resolution_clock::now().time_since_epoch().count();
+        uint64_t addr = (uint64_t)(uintptr_t)&seed;
+        seed = now ^ (addr + 0x9e3779b97f4a7c15ULL + ((uint64_t)rd() << 1));
+    }
+    rng.seed(seed);
+}
+
+static Move randomPick(const vector<Move> &moves) {
+    uniform_int_distribution<int> dist(0, (int)moves.size() - 1);
+    return moves[dist(rng)];
+}
+
+static int nearBestTolerance(int bestScore) {
+    int scaled = abs(bestScore) / 80;
+    return max(1200, min(25000, scaled));
+}
+
+#endif
 
 static inline bool inside(int r, int c) {
     return r >= 0 && r < N && c >= 0 && c < N;
@@ -254,6 +295,20 @@ static bool legalMove(int r, int c, int color) {
     if (color == BLACK && isForbiddenBlackMove(r, c)) return false;
     return true;
 }
+
+#ifdef RANDOM_AI
+static Move randomOpeningMove(int color) {
+    vector<Move> choices;
+    for (int dr = -1; dr <= 1; ++dr) {
+        for (int dc = -1; dc <= 1; ++dc) {
+            int r = 18 + dr, c = 18 + dc;
+            if (legalMove(r, c, color)) choices.push_back({r, c});
+        }
+    }
+    if (choices.empty()) return {18, 18};
+    return randomPick(choices);
+}
+#endif
 
 static int lineWindowScore(int black, int white, int empty, int color) {
     int mine = color == BLACK ? black : white;
@@ -440,7 +495,11 @@ static int alphaBeta(int depth, int alpha, int beta, int side, int rootColor, Mo
 }
 
 static Move chooseMove(int color) {
+#ifdef RANDOM_AI
+    if (moveCount == 0) return randomOpeningMove(color);
+#else
     if (moveCount == 0) return {18, 18};
+#endif
 
     deadlineTime = chrono::steady_clock::now() + chrono::milliseconds(TIME_LIMIT_MS);
     timeoutFlag = false;
@@ -480,6 +539,9 @@ static Move chooseMove(int color) {
         if (timeExpired()) break;
         int depthBest = -INF;
         Move depthMove = bestMove;
+#ifdef RANDOM_AI
+        vector<pair<Move, int>> scoredMoves;
+#endif
         vector<Candidate> moves = rootMoves;
         sort(moves.begin(), moves.end(), [&](const Candidate &a, const Candidate &b) {
             if (a.m.r == bestMove.r && a.m.c == bestMove.c) return true;
@@ -493,6 +555,9 @@ static Move chooseMove(int color) {
             int val = alphaBeta(depth - 1, -INF / 2, INF / 2, opponent(color), color, {r, c}, color, 1);
             removeStone(r, c, color);
             if (timeoutFlag) break;
+#ifdef RANDOM_AI
+            scoredMoves.push_back({{r, c}, val});
+#endif
             if (val > depthBest) {
                 depthBest = val;
                 depthMove = {r, c};
@@ -500,6 +565,14 @@ static Move chooseMove(int color) {
         }
         if (!timeoutFlag) {
             bestScore = depthBest;
+#ifdef RANDOM_AI
+            vector<Move> nearBest;
+            int tolerance = nearBestTolerance(depthBest);
+            for (const auto &item : scoredMoves) {
+                if (depthBest - item.second <= tolerance) nearBest.push_back(item.first);
+            }
+            if (!nearBest.empty()) depthMove = randomPick(nearBest);
+#endif
             bestMove = depthMove;
         }
     }
@@ -563,6 +636,9 @@ static void clearBoard() {
 int main() {
     ios::sync_with_stdio(false);
     cin.tie(nullptr);
+#ifdef RANDOM_AI
+    initRuntimeRandom();
+#endif
     initZobrist();
 
     const int opp = opponent(MY_COLOR);
