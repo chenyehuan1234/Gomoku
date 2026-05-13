@@ -1,11 +1,16 @@
 # Gomoku
 
-38 路五子棋命令行 AI，使用 C++17 编写。项目提供两个独立程序：
+38 路五子棋命令行 AI，使用 C++17 编写。项目提供两个裁判版程序和两个可视化程序：
 
 - `black.exe`：黑方 AI，启动后立即输出第一手。
 - `white.exe`：白方 AI，启动后等待输入黑方第一手，再输出自己的落子。
+- `black_show.exe`：黑方 AI，额外在控制台显示棋盘。
+- `white_show.exe`：白方 AI，额外在控制台显示棋盘。
+- `gomoku_referee.py`：Python 图形化裁判，可选择两个 exe 自动对打，也支持用户手动落子。
 
-程序用于裁判程序或手动命令行交互。标准输出严格只打印坐标，不打印中文、提示语、棋盘或胜负信息。
+裁判版用于自动评测或程序交互。标准输出严格只打印坐标，不打印中文、提示语、棋盘或胜负信息。
+
+可视化版用于人工观察。它仍然把坐标写到标准输出，同时把棋盘写到标准错误流；在普通 Windows 黑色控制台中，两者都会显示出来。
 
 ## 输入输出协议
 
@@ -43,13 +48,67 @@ row col
 
 之后同样是“读入对手一步，输出自己一步”的循环。读到 EOF 后程序退出。
 
+### 可视化版本
+
+`black_show.exe` 和 `white_show.exe` 的输入方式与普通版本相同。不同点是每次 AI 落子后都会显示完整棋盘：
+
+- `X` 表示黑棋。
+- `O` 表示白棋。
+- `.` 表示空位。
+- 顶部和左侧显示 `1..38` 坐标。
+
+示例：
+
+```powershell
+.\black_show.exe
+```
+
+黑方会先输出坐标并显示棋盘。之后继续输入白方坐标即可。
+
+## Python 图形化裁判
+
+`gomoku_referee.py` 是一个单文件 Tkinter 裁判程序，不需要安装第三方库。它会独立维护棋盘和规则，不依赖参赛 exe 自己判断胜负或禁手。
+
+启动方式：
+
+```powershell
+python gomoku_referee.py
+```
+
+主要功能：
+
+- 支持 `黑 exe vs 白 exe`、`用户黑 vs exe 白`、`exe 黑 vs 用户白`、`用户 vs 用户` 四种模式。
+- 可以在界面中分别选择黑方和白方 exe。
+- 用户落子时直接点击棋盘交点。
+- 自动判断越界、重复落子、黑方三三禁手、四四禁手、长连禁手、胜负和平局。
+- 黑方如果本手形成恰好五连，即使同时出现禁手形状，也按黑方胜利处理。
+- exe 输出支持模糊解析：stdout 中可以带中文、提示语等内容，裁判会抓取第一组当前可用的合法坐标。
+- 黑方 exe 第一手 5 秒未输出时，裁判会在中心 9 格随机落一手，不判负。
+- 普通回合 10 秒超时，当前一方直接判负。
+- 界面右侧显示日志和累计比分；每盘结束后可用进度条复盘任意手数。
+
+注意：
+
+- 裁判只从 exe 的标准输出 `stdout` 解析坐标。
+- 标准错误 `stderr` 会进入日志，但不会参与落子解析。
+- 给 exe 的输入仍然是 `row col`，坐标范围仍为 `1..38`。
+- 累计比分只保存在本次程序运行期间，关闭程序后不会自动保存。
+
 ## 编译
 
-本项目使用同一个 `main.cpp` 通过编译宏生成两个 exe。
+本项目使用同一个 `main.cpp` 通过编译宏生成不同 exe。
 
 ```powershell
 g++ -O2 -std=c++17 -DBLACK_AI main.cpp -o black.exe
 g++ -O2 -std=c++17 -DWHITE_AI main.cpp -o white.exe
+g++ -O2 -std=c++17 -DBLACK_AI -DSHOW_BOARD main.cpp -o black_show.exe
+g++ -O2 -std=c++17 -DWHITE_AI -DSHOW_BOARD main.cpp -o white_show.exe
+g++ -O2 -std=c++17 -DBLACK_AI -DSUPER_AI main.cpp -o black_super.exe
+g++ -O2 -std=c++17 -DWHITE_AI -DSUPER_AI main.cpp -o white_super.exe
+g++ -O2 -std=c++17 -DBLACK_AI -DFAST_AI main.cpp -o black_fast.exe
+g++ -O2 -std=c++17 -DWHITE_AI -DFAST_AI main.cpp -o white_fast.exe
+g++ -O2 -std=c++17 -DBLACK_AI -DULTRAFAST_AI main.cpp -o black_ultrafast.exe
+g++ -O2 -std=c++17 -DWHITE_AI -DULTRAFAST_AI main.cpp -o white_ultrafast.exe
 ```
 
 内部规则测试：
@@ -136,9 +195,9 @@ g++ -O2 -std=c++17 -DSELF_TEST main.cpp -o self_test.exe
 
 同一个局面如果通过不同落子顺序到达，可以复用已有搜索结果。
 
-## 参数档位
+## 参数档位和文件名
 
-当前 exe 使用平衡档：
+当前 `black.exe` / `white.exe` 是中等档：
 
 ```cpp
 milliseconds(1500)
@@ -147,7 +206,18 @@ rootMoves 30
 depth >= 3 ? 14 : 20
 ```
 
-如果想更快，可以把参数改成：
+额外提供 3 个纯坐标档位：
+
+| 档位 | 黑方 | 白方 | 时间 | 深度 | 根候选 | 深层/浅层候选 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 超级 | `black_super.exe` | `white_super.exe` | `2800ms` | `5` | `40` | `18 / 26` |
+| 中等 | `black.exe` | `white.exe` | `1500ms` | `4` | `30` | `14 / 20` |
+| 快速 | `black_fast.exe` | `white_fast.exe` | `900ms` | `4` | `24` | `10 / 16` |
+| 超快速 | `black_ultrafast.exe` | `white_ultrafast.exe` | `350ms` | `3` | `18` | `8 / 12` |
+
+可视化版 `black_show.exe` / `white_show.exe` 使用中等档参数，并额外显示棋盘。
+
+如果想手动改得更快，可以把默认参数改成：
 
 ```cpp
 milliseconds(900)
@@ -172,6 +242,12 @@ depth >= 3 ? 18 : 26
 - `main.cpp`：完整 AI、规则、搜索和交互入口。
 - `black.exe`：黑方可执行程序。
 - `white.exe`：白方可执行程序。
+- `black_show.exe`：黑方可视化程序。
+- `white_show.exe`：白方可视化程序。
+- `gomoku_referee.py`：Python 图形化裁判，支持 exe 对打、用户对打、日志、复盘和累计比分。
+- `black_super.exe` / `white_super.exe`：超级档，棋力更强但更慢。
+- `black_fast.exe` / `white_fast.exe`：快速档。
+- `black_ultrafast.exe` / `white_ultrafast.exe`：超快速档。
 
 ## 验证建议
 
@@ -190,6 +266,15 @@ depth >= 3 ? 18 : 26
 18 19
 ```
 
+可视化版本测试：
+
+```powershell
+@('12 12') | .\black_show.exe
+@('19 19') | .\white_show.exe
+```
+
+坐标会继续输出，棋盘会显示在控制台中。
+
 禁手测试通过 `SELF_TEST` 覆盖：
 
 - 黑方长连禁手。
@@ -197,3 +282,10 @@ depth >= 3 ? 18 : 26
 - 黑方四四禁手。
 - 黑方恰好五连优先于禁手。
 
+图形化裁判测试：
+
+```powershell
+python gomoku_referee.py
+```
+
+可在界面中选择 `black.exe` 和 `white.exe` 进行自动对打，也可以切换到用户模式后点击棋盘手动落子。
